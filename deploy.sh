@@ -13,5 +13,5 @@ fi
 URL="https://$OWNER.github.io/$REPO/"
 echo "Attente du déploiement Pages…"
 for i in $(seq 1 40); do c=$(curl -s -o /dev/null -w "%{http_code}" "$URL"); [ "$c" = 200 ] && break; sleep 10; done
-for p in "" manifest.json icons/apple-touch-icon.png icons/icon-512.png sw.js vendor/jspdf.umd.min.js; do curl -s -o /dev/null -w "%{http_code} %{content_type} $p\n" "$URL$p"; done
+for p in "" manifest.json icons/apple-touch-icon.png icons/icon-512.png sw.js vendor/jspdf.umd.min.js vendor/pdf.min.js vendor/pdf.worker.min.js; do curl -s -o /dev/null -w "%{http_code} %{content_type} $p\n" "$URL$p"; done
 echo "$URL"

@@ -11,7 +11,7 @@ const DEFAULT_JOBS = [
   {id:'structures', label:'Structures', color:'#f4da00'},
 ];
 const PALETTE = ['#0891b2','#65a30d','#9333ea','#e11d48','#0d9488','#ca8a04','#4f46e5','#c2410c'];
-const DEFAULT_SETTINGS = { name: '', extraFrom: 24, overFrom: 40 };
+const DEFAULT_SETTINGS = { name: '', overFrom: 40 };
 const MOIS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 const reduceMotion = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -37,6 +37,7 @@ let state = load() || { current: iso(mondayOf(new Date())), weeks: {} };
 if (!state.weeks) state.weeks = {};
 if (!state.current) state.current = iso(mondayOf(new Date()));
 state.settings = Object.assign({}, DEFAULT_SETTINGS, state.settings || {});
+delete state.settings.extraFrom; // migrate: former 24 h threshold is ignored
 if (!Array.isArray(state.settings.jobs) || !state.settings.jobs.length) {
   // v1/v2 -> v3: default job list (old ids kept, so counts are preserved) + new "Structures"
   state.settings.jobs = DEFAULT_JOBS.map(j => ({...j}));
@@ -59,10 +60,9 @@ function totals(w){
   const t = { min: 0, jobs: {} };
   JOBS().forEach(j => t.jobs[j.id] = 0);
   w.days.forEach(d => { t.min += dayMin(d); JOBS().forEach(j => t.jobs[j.id] += Number(d.jobs[j.id])||0); });
-  const a = Math.max(0, Number(S().extraFrom)||0) * 60, b = Math.max(a, (Number(S().overFrom)||0) * 60);
-  t.extra = Math.max(0, Math.min(t.min, b) - a);
+  const b = Math.max(0, (Number(S().overFrom)||0) * 60);
   t.over = Math.max(0, t.min - b);
-  t.a = a; t.b = b;
+  t.b = b;
   return t;
 }
 
@@ -137,10 +137,9 @@ function buildSummary(){
   $('#summary').innerHTML = `<h2>Résumé de la semaine</h2>
     <div class="sumgrid">
       <div class="tile total"><div class="k">Total heures</div><div class="v" id="vTotal">0 h 00</div></div>
-      <div class="tile extra" id="tExtra"><div class="k">Extra (${s.extraFrom} h à ${s.overFrom} h)</div><div class="v" id="vExtra">0 h 00</div></div>
-      <div class="tile over wide" id="tOver"><div class="k">Heures supp. (+${s.overFrom} h)</div><div class="v" id="vOver">0 h 00</div></div>
-      <div class="progress"><div class="ptrack"><div class="pfill" id="pFill"></div><i class="pmark" id="mA"></i><i class="pmark" id="mB"></i></div>
-        <div class="plabels"><span id="lA">${s.extraFrom} h</span><span id="lB">${s.overFrom} h</span></div></div>
+      <div class="tile over" id="tOver"><div class="k">Heures supp. (+${s.overFrom} h)</div><div class="v" id="vOver">0 h 00</div></div>
+      <div class="progress"><div class="ptrack"><div class="pfill" id="pFill"></div><i class="pmark" id="mB"></i></div>
+        <div class="plabels"><span id="lB">${s.overFrom} h</span></div></div>
       ${JOBS().map(j => `<div class="tile job-t" style="--c:${j.color}"><div class="k">${esc(j.label)}</div><div class="v" data-t="${j.id}">0</div></div>`).join('')}
     </div>`;
   $('#summary').querySelectorAll('.v').forEach(v => v.dataset.val = 0);
@@ -148,16 +147,14 @@ function buildSummary(){
 function updateSummary(){
   const t = totals(week());
   countTo($('#vTotal'), t.min, fmtHM);
-  countTo($('#vExtra'), t.extra, fmtHM);
   countTo($('#vOver'), t.over, fmtHM);
-  $('#tExtra').classList.toggle('glow', t.extra > 0);
   $('#tOver').classList.toggle('glow', t.over > 0);
   JOBS().forEach(j => { const el = $(`[data-t="${j.id}"]`); if (el) countTo(el, t.jobs[j.id], fmtInt); });
   const scale = Math.max(t.b * 1.2, t.min, 60);
   $('#pFill').style.transform = `scaleX(${Math.min(1, t.min/scale)})`;
-  $('#pFill').className = 'pfill ' + (t.min > t.b ? 's2' : t.min > t.a ? 's1' : 's0');
-  ['A','B'].forEach(k => { const pct = (k==='A'?t.a:t.b)/scale*100;
-    $('#m'+k).style.left = pct + '%'; $('#l'+k).style.left = pct + '%'; });
+  $('#pFill').className = 'pfill ' + (t.min > t.b ? 's2' : 's0');
+  const pct = t.b/scale*100;
+  $('#mB').style.left = pct + '%'; $('#lB').style.left = pct + '%';
 }
 
 function goWeek(mon, dir){ state.current = iso(mondayOf(mon)); save(); slideDir = reduceMotion() ? '' : dir; render(); window.scrollTo({top:0, behavior: reduceMotion() ? 'auto' : 'smooth'}); }
@@ -198,7 +195,7 @@ function renderJobEditor(){
   });
 }
 function openSettings(){
-  $('#setName').value = S().name; $('#setExtra').value = S().extraFrom; $('#setOver').value = S().overFrom;
+  $('#setName').value = S().name; $('#setOver').value = S().overFrom;
   draftJobs = JOBS().map(j => ({...j})); renderJobEditor();
   $('#settings').hidden = false; $('#settings').classList.remove('enter'); void $('#settings').offsetWidth; $('#settings').classList.add('enter');
   window.scrollTo({top:0});
@@ -215,11 +212,10 @@ $('#resetJobs').onclick = () => {
   draftJobs = DEFAULT_JOBS.map(j => ({...j})); renderJobEditor();
 };
 $('#setSave').onclick = () => {
-  let ex = parseFloat($('#setExtra').value), ov = parseFloat($('#setOver').value);
-  if (isNaN(ex) || ex < 0) ex = 24; if (isNaN(ov) || ov < 0) ov = 40;
-  if (ov < ex) { alert('Le seuil des heures supp. doit être plus grand ou égal au seuil Extra.'); return; }
+  let ov = parseFloat($('#setOver').value);
+  if (isNaN(ov) || ov < 0) ov = 40;
   const jobs = draftJobs.map(j => ({...j, label: j.label.trim()})).filter(j => j.label);
-  state.settings = { name: $('#setName').value.trim().slice(0,60), extraFrom: ex, overFrom: ov, jobs };
+  state.settings = { name: $('#setName').value.trim().slice(0,60), overFrom: ov, jobs };
   save(); $('#settings').hidden = true; render(); toast('Réglages enregistrés ✅');
 };
 
@@ -251,7 +247,7 @@ function buildPdf(){
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
   const mon = parseIso(state.current), w = week(), t = totals(w), jobs = JOBS(), s = S();
-  const DARK = [8,11,12], YEL = [244,218,0], BR = [0,126,110], OK = [22,163,74], RED = [220,38,38];
+  const DARK = [8,11,12], YEL = [244,218,0], BR = [0,126,110], RED = [220,38,38];
   // header band
   doc.setFillColor(...DARK); doc.rect(0,0,W,96,'F');
   doc.setFillColor(...BR); doc.rect(0,96,W,4,'F');
@@ -268,10 +264,10 @@ function buildPdf(){
   doc.text(`Généré le ${fmtLong(new Date())} à ${pad(new Date().getHours())}:${pad(new Date().getMinutes())}`, W-40, 78, {align:'right'});
 
   const overLabel = `Heures supp. (+${s.overFrom} h)`;
-  const head = [['Jour','Date','Heures', ...jobs.map(j => j.label), 'Extra', overLabel]];
-  const body = w.days.map((d,i) => [DAYS[i], fmtShort(addDays(mon,i)), fmtHM(dayMin(d)), ...jobs.map(j => String(d.jobs[j.id]||0)), '', '']);
-  const foot = [['TOTAL','', fmtHM(t.min), ...jobs.map(j => String(t.jobs[j.id])), fmtHM(t.extra), fmtHM(t.over)]];
-  const extraCol = head[0].length - 2, overCol = head[0].length - 1;
+  const head = [['Jour','Date','Heures', ...jobs.map(j => j.label), overLabel]];
+  const body = w.days.map((d,i) => [DAYS[i], fmtShort(addDays(mon,i)), fmtHM(dayMin(d)), ...jobs.map(j => String(d.jobs[j.id]||0)), '']);
+  const foot = [['TOTAL','', fmtHM(t.min), ...jobs.map(j => String(t.jobs[j.id])), fmtHM(t.over)]];
+  const overCol = head[0].length - 1;
   const many = jobs.length > 7;
   doc.autoTable({
     head, body, foot, startY: 126, theme: 'grid', showFoot: 'lastPage',
@@ -280,14 +276,12 @@ function buildPdf(){
     headStyles: { fillColor: [23,27,29], textColor: 255, fontStyle: 'bold', fontSize: many ? 7.5 : 8.5 },
     footStyles: { fillColor: DARK, textColor: 255, fontStyle: 'bold', fontSize: 11 },
     alternateRowStyles: { fillColor: [244,245,240] },
-    columnStyles: { 0: { halign:'left', fontStyle:'bold', cellWidth: 62 }, 1: { cellWidth: 52 }, 2: { fontStyle:'bold', cellWidth: 58 }, [extraCol]: { cellWidth: 58 }, [overCol]: { cellWidth: 70 } },
+    columnStyles: { 0: { halign:'left', fontStyle:'bold', cellWidth: 62 }, 1: { cellWidth: 52 }, 2: { fontStyle:'bold', cellWidth: 58 }, [overCol]: { cellWidth: 80 } },
     didParseCell: data => {
       const c = data.column.index;
-      if (data.section === 'head' && c >= 3 && c < extraCol) { const j = jobs[c-3]; data.cell.styles.fillColor = hexRgb(j.color); data.cell.styles.textColor = hexRgb(onColor(j.color)); }
-      if (data.section === 'head' && c === extraCol) data.cell.styles.fillColor = OK;
+      if (data.section === 'head' && c >= 3 && c < overCol) { const j = jobs[c-3]; data.cell.styles.fillColor = hexRgb(j.color); data.cell.styles.textColor = hexRgb(onColor(j.color)); }
       if (data.section === 'head' && c === overCol) data.cell.styles.fillColor = RED;
-      if (data.section === 'body' && c >= extraCol) data.cell.styles.fillColor = [250,250,248];
-      if (data.section === 'foot' && c === extraCol) { data.cell.styles.fillColor = OK; data.cell.styles.textColor = 255; }
+      if (data.section === 'body' && c === overCol) data.cell.styles.fillColor = [250,250,248];
       if (data.section === 'foot' && c === overCol) { data.cell.styles.fillColor = RED; data.cell.styles.textColor = 255; }
       if (data.section === 'foot' && c === 2) { data.cell.styles.textColor = YEL; }
     },
@@ -296,7 +290,6 @@ function buildPdf(){
   const y = doc.lastAutoTable.finalY + 28;
   const boxes = [
     { k:'Total des heures', v: fmtHM(t.min), c:[23,27,29], tc: YEL },
-    { k:`Extra (${s.extraFrom} h à ${s.overFrom} h)`, v: fmtHM(t.extra), c: OK },
     { k:`Heures supp. (+${s.overFrom} h)`, v: fmtHM(t.over), c: RED },
     { k:'Total side jobs', v: String(Object.values(t.jobs).reduce((a,b)=>a+b,0)), c: BR },
   ];
@@ -314,6 +307,108 @@ function buildPdf(){
   return doc;
 }
 
+// ---------- PDF preview (pdf.js canvases — works in iOS Safari standalone) ----------
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+
+let previewFile = null, previewUrl = null;
+function resetPreviewZoom(){
+  const pages = $('#pdfPages'), scroller = $('#pdfScroller');
+  if (pages) pages.style.width = '100%';
+  if (scroller) { scroller.scrollTop = 0; scroller.scrollLeft = 0; }
+  resetPreviewZoom._scale = 1;
+}
+(function attachPreviewZoom(){
+  const scroller = $('#pdfScroller'), pages = $('#pdfPages');
+  if (!scroller || scroller._zoomBound) return;
+  scroller._zoomBound = true;
+  let startDist = 0, startScale = 1;
+  const mid = (touches, rect) => ({
+    x: (touches[0].clientX + touches[1].clientX) / 2 - rect.left,
+    y: (touches[0].clientY + touches[1].clientY) / 2 - rect.top
+  });
+  const apply = (s, mx, my) => {
+    const prev = resetPreviewZoom._scale || 1;
+    const scale = Math.min(4, Math.max(1, s));
+    resetPreviewZoom._scale = scale;
+    pages.style.width = (scale * 100) + '%';
+    if (mx != null && prev) {
+      const r = scale / prev;
+      scroller.scrollLeft = (scroller.scrollLeft + mx) * r - mx;
+      scroller.scrollTop = (scroller.scrollTop + my) * r - my;
+    }
+  };
+  scroller.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      startDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      startScale = resetPreviewZoom._scale || 1;
+    }
+  }, { passive: true });
+  scroller.addEventListener('touchmove', e => {
+    if (e.touches.length === 2 && startDist) {
+      e.preventDefault();
+      const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      const rect = scroller.getBoundingClientRect();
+      const m = mid(e.touches, rect);
+      apply(startScale * dist / startDist, m.x, m.y);
+    }
+  }, { passive: false });
+  scroller.addEventListener('touchend', e => { if (e.touches.length < 2) startDist = 0; });
+})();
+
+function closePreview(){
+  $('#pdfPreview').hidden = true;
+  document.body.classList.remove('pdf-open');
+  $('#pdfPages').innerHTML = '';
+  if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+  previewFile = null;
+}
+async function renderPdfPages(blob){
+  const status = $('#pdfStatus'), pages = $('#pdfPages');
+  status.hidden = false; status.textContent = 'Préparation de l’aperçu…';
+  pages.innerHTML = '';
+  if (!window.pdfjsLib) throw new Error('pdf.js introuvable');
+  const data = new Uint8Array(await blob.arrayBuffer());
+  const pdf = await pdfjsLib.getDocument({ data }).promise;
+  // measure after a layout pass so width is the scroller's content box
+  await new Promise(r => requestAnimationFrame(r));
+  const cssWidth = Math.max(280, pages.clientWidth || ($('#pdfScroller').clientWidth - 24));
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const page = await pdf.getPage(n);
+    const base = page.getViewport({ scale: 1 });
+    const scale = (cssWidth / base.width) * dpr * 2; // sharp up to ~2× pinch
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.className = 'pdf-page';
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    canvas.setAttribute('aria-label', 'Page ' + n);
+    await page.render({ canvasContext: canvas.getContext('2d', { alpha: false }), viewport }).promise;
+    pages.appendChild(canvas);
+  }
+  status.hidden = true;
+}
+function downloadPreview(){
+  if (!previewFile) return;
+  const url = previewUrl || URL.createObjectURL(previewFile);
+  previewUrl = url;
+  const a = document.createElement('a'); a.href = url; a.download = previewFile.name;
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('PDF téléchargé ✅');
+}
+async function sharePreview(){
+  if (!previewFile) return;
+  if (navigator.canShare && navigator.canShare({ files: [previewFile] })) {
+    try { await navigator.share({ files: [previewFile], title: previewFile.name }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  downloadPreview();
+}
+$('#pdfClose').onclick = closePreview;
+$('#pdfShare').onclick = () => sharePreview();
+$('#pdfDownload').onclick = downloadPreview;
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#pdfPreview').hidden) closePreview(); });
+
 $('#pdfBtn').onclick = async () => {
   try {
     const doc = buildPdf();
@@ -321,16 +416,17 @@ $('#pdfBtn').onclick = async () => {
     const safe = userName().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
     const fname = `Heures_${safe ? safe + '_' : ''}semaine_${state.current}.pdf`;
     const blob = doc.output('blob');
-    const file = new File([blob], fname, { type: 'application/pdf' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: fname }); return; }
-      catch (e) { if (e && e.name === 'AbortError') return; }
+    previewFile = new File([blob], fname, { type: 'application/pdf' });
+    if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+    resetPreviewZoom();
+    $('#pdfPreview').hidden = false;
+    document.body.classList.add('pdf-open');
+    try { await renderPdfPages(blob); }
+    catch (err) {
+      console.error(err);
+      $('#pdfStatus').hidden = false;
+      $('#pdfStatus').textContent = 'Aperçu indisponible — utilise Partager ou Télécharger.';
     }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = fname;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-    toast('PDF créé ✅');
   } catch (e) { console.error(e); alert('Erreur PDF : ' + e.message); }
 };
 
