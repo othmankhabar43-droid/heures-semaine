@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mes heures</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mes heures">
+<meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <img src="icons/icon-192.png" alt="" width="36" height="36">
+    <div><h1>Mes heures</h1><p class="sub">Othmane Khabar</p></div>
+  </div>
+  <div class="weeknav">
+    <button class="icon-btn" id="prevWeek" aria-label="Semaine précédente">‹</button>
+    <label class="weeklabel">
+      <span id="weekRange">—</span>
+      <input type="date" id="weekPicker" aria-label="Choisir la semaine">
+    </label>
+    <button class="icon-btn" id="nextWeek" aria-label="Semaine suivante">›</button>
+  </div>
+</header>
+
+<main id="days"></main>
+
+<section class="card summary" id="summary"></section>
+
+<section class="actions">
+  <button class="btn primary" id="pdfBtn">📄 Générer le PDF</button>
+  <div class="row2">
+    <button class="btn" id="newWeekBtn">➕ Nouvelle semaine</button>
+    <button class="btn danger" id="resetBtn">↺ Réinitialiser</button>
+  </div>
+  <p class="note">Les données restent sur ce téléphone (dans Safari / l’app ajoutée à l’écran d’accueil).</p>
+</section>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="vendor/jspdf.umd.min.js"></script>
+<script src="vendor/jspdf.plugin.autotable.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
