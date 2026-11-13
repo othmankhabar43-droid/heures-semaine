@@ -9,6 +9,7 @@ const DEFAULT_JOBS = [
   {id:'spectaculaire', label:'Spectaculaire', color:'#db2777'},
   {id:'spectaculaireGrua', label:'Spectaculaire (grua)', color:'#b45309'},
   {id:'structures', label:'Structures', color:'#f4da00'},
+  {id:'scrap', label:'Scrap', color:'#64748b'},
 ];
 const PALETTE = ['#0891b2','#65a30d','#9333ea','#e11d48','#0d9488','#ca8a04','#4f46e5','#c2410c'];
 const DEFAULT_SETTINGS = { name: '', overFrom: 40 };
@@ -42,7 +43,11 @@ if (!Array.isArray(state.settings.jobs) || !state.settings.jobs.length) {
   // v1/v2 -> v3: default job list (old ids kept, so counts are preserved) + new "Structures"
   state.settings.jobs = DEFAULT_JOBS.map(j => ({...j}));
 }
-state.version = 3;
+// v3 -> v4: add new default job "Scrap" for existing users (once)
+if ((state.version||0) < 4 && !state.settings.jobs.some(j => j.id === 'scrap')) {
+  state.settings.jobs.push({...DEFAULT_JOBS.find(j => j.id === 'scrap')});
+}
+state.version = 4;
 const S = () => state.settings;
 const JOBS = () => S().jobs;
 const userName = () => (S().name || '').trim();

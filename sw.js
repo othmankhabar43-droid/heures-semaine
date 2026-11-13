@@ -1,4 +1,4 @@
-const CACHE = 'heures-v4';
+const CACHE = 'heures-v5';
 const FILES = ['./','index.html','styles.css','app.js','manifest.json',
   'vendor/jspdf.umd.min.js','vendor/jspdf.plugin.autotable.min.js','vendor/pdf.min.js','vendor/pdf.worker.min.js',
   'icons/apple-touch-icon.png','assets/logo.png','assets/logo-160.png','fonts/PlusJakartaSans-latin.woff2','icons/icon-192.png','icons/icon-512.png'];
