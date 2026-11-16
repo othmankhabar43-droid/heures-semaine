@@ -60,6 +60,13 @@ function week(){
   w.days.forEach(d => { d.jobs = d.jobs || {}; });
   return w;
 }
+// start/end "HH:MM" -> minutes worked (handles past-midnight), null if incomplete
+function spanMin(a, b){
+  if (!a || !b) return null;
+  const [ah,am] = a.split(':').map(Number), [bh,bm] = b.split(':').map(Number);
+  let m = (bh*60+bm) - (ah*60+am); if (m < 0) m += 1440;
+  return m;
+}
 const dayMin = d => (Number(d.h)||0)*60 + (Number(d.m)||0);
 function totals(w){
   const t = { min: 0, jobs: {} };
@@ -104,6 +111,9 @@ function render(){
     card.innerHTML = `
       <div class="dayhead"><h2>${DAYS[i]}${isToday ? '<span class="badge">Aujourd’hui</span>' : ''}</h2>
         <span><span class="date">${fmtLong(date)}</span><span class="daytot">${fmtHM(dayMin(d))}</span></span></div>
+      <div class="hours times"><span class="lbl">🕒 Début</span>
+        <input type="time" data-t="start" value="${d.start||''}"><span class="lbl lbl2">Fin</span>
+        <input type="time" data-t="end" value="${d.end||''}"></div>
       <div class="hours"><span class="lbl">⏱ Heures</span>
         <input type="number" inputmode="numeric" min="0" max="24" data-f="h" value="${d.h||''}" placeholder="0"><span class="u">h</span>
         <input type="number" inputmode="numeric" min="0" max="59" data-f="m" value="${d.m||''}" placeholder="00"><span class="u">min</span></div>
@@ -113,7 +123,19 @@ function render(){
           <span class="qty" data-q="${j.id}">${d.jobs[j.id]||0}</span>
           <button class="step plus" data-j="${j.id}" data-d="1" aria-label="plus ${esc(j.label)}">+</button></div>`).join('')}
       </div>`;
-    card.querySelectorAll('input').forEach(inp => inp.addEventListener('input', () => {
+    const hIn = card.querySelector('[data-f="h"]'), mIn = card.querySelector('[data-f="m"]');
+    card.querySelectorAll('input[type="time"]').forEach(inp => inp.addEventListener('change', () => {
+      d[inp.dataset.t] = inp.value; 
+      const mins = spanMin(d.start, d.end);
+      if (mins !== null) {
+        d.h = Math.floor(mins/60); d.m = mins%60;
+        hIn.value = d.h || ''; mIn.value = d.m || '';
+      }
+      save();
+      card.querySelector('.daytot').textContent = fmtHM(dayMin(d));
+      updateSummary();
+    }));
+    card.querySelectorAll('input[type="number"]').forEach(inp => inp.addEventListener('input', () => {
       let v = parseInt(inp.value, 10); if (isNaN(v) || v < 0) v = 0;
       const max = inp.dataset.f === 'h' ? 24 : 59; if (v > max) { v = max; inp.value = v; }
       d[inp.dataset.f] = v; save();
@@ -270,7 +292,7 @@ function buildPdf(){
 
   const overLabel = `Heures supp. (+${s.overFrom} h)`;
   const head = [['Jour','Date','Heures', ...jobs.map(j => j.label), overLabel]];
-  const body = w.days.map((d,i) => [DAYS[i], fmtShort(addDays(mon,i)), fmtHM(dayMin(d)), ...jobs.map(j => String(d.jobs[j.id]||0)), '']);
+  const body = w.days.map((d,i) => [DAYS[i], fmtShort(addDays(mon,i)) + (d.start && d.end ? `\n${d.start}–${d.end}` : ''), fmtHM(dayMin(d)), ...jobs.map(j => String(d.jobs[j.id]||0)), '']);
   const foot = [['TOTAL','', fmtHM(t.min), ...jobs.map(j => String(t.jobs[j.id])), fmtHM(t.over)]];
   const overCol = head[0].length - 1;
   const many = jobs.length > 7;

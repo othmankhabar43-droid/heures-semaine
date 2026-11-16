@@ -155,3 +155,7 @@ h1 .y{color:var(--yellow)}
 .pdf-pages canvas.pdf-page{width:100%;height:auto;display:block;margin:0 auto 12px;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,.45);border-radius:2px}
 .pdf-status{margin:0;padding:24px 16px;color:#fff;font-weight:700;text-align:center}
 body.pdf-open{overflow:hidden}
+
+.hours.times{gap:6px}
+.hours.times .lbl{flex:0 0 auto;white-space:nowrap}
+.hours.times input{width:auto;min-width:0;flex:1 1 0;font-size:17px;padding:0 4px}
